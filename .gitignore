@@ -25,6 +25,7 @@ Makefile
 
 # C# / .NET
 *.dll
+!UnityReflectionLib/Libs/README.md
 *.pdb
 *.cache
 project.lock.json

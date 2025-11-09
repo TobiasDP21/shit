@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace UnityReflectionLib
+namespace UnityReflectionMod
 {
     public class IPCServer
     {
@@ -203,13 +203,11 @@ namespace UnityReflectionLib
         private void Log(string message)
         {
             OnLog?.Invoke(message);
-            UnityEngine.Debug.Log($"[IPCServer] {message}");
         }
 
         private void LogError(string message)
         {
             OnError?.Invoke(message);
-            UnityEngine.Debug.LogError($"[IPCServer] {message}");
         }
     }
 }

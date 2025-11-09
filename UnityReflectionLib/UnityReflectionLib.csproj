@@ -1,21 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net471</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>UnityReflectionMod</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Reference UnityEngine.dll from your Unity installation -->
-    <!-- Update this path to match your Unity installation -->
+    <!-- MelonLoader reference - place MelonLoader.dll in Libs/ folder -->
+    <Reference Include="MelonLoader">
+      <HintPath>Libs\MelonLoader.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <!-- UnityEngine references - these come from the game's managed folder -->
     <Reference Include="UnityEngine">
-      <HintPath>$(UNITY_PATH)\Editor\Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>Libs\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(UNITY_PATH)\Editor\Data\Managed\UnityEngine\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>Libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

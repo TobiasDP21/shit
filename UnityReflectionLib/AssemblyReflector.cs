@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace UnityReflectionLib
+namespace UnityReflectionMod
 {
     public class AssemblyReflector
     {
@@ -20,7 +20,7 @@ namespace UnityReflectionLib
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.LogError($"Failed to load Assembly-CSharp: {ex.Message}");
+                MelonLoader.MelonLogger.Error($"Failed to load Assembly-CSharp: {ex.Message}");
                 return new AssemblyData { AssemblyName = "Assembly-CSharp (Failed to load)" };
             }
         }
@@ -45,13 +45,13 @@ namespace UnityReflectionLib
                     }
                     catch (Exception ex)
                     {
-                        UnityEngine.Debug.LogWarning($"Failed to reflect type {type.FullName}: {ex.Message}");
+                        MelonLoader.MelonLogger.Warning($"Failed to reflect type {type.FullName}: {ex.Message}");
                     }
                 }
             }
             catch (ReflectionTypeLoadException ex)
             {
-                UnityEngine.Debug.LogError($"ReflectionTypeLoadException: {ex.Message}");
+                MelonLoader.MelonLogger.Error($"ReflectionTypeLoadException: {ex.Message}");
                 if (ex.Types != null)
                 {
                     foreach (var type in ex.Types.Where(t => t != null))

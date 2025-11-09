@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnityReflectionLib
+namespace UnityReflectionMod
 {
     [Serializable]
     public class TypeInfo
