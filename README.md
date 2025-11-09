@@ -17,7 +17,8 @@ The MelonLoader mod:
 - Hooks into any MelonLoader-compatible Unity game
 - Extracts all classes, structs, enums, and interfaces from Assembly-CSharp
 - Gets all fields, methods, and properties (including private members)
-- Sends the data to the external viewer via Named Pipes
+- Streams live data updates to the external viewer via Named Pipes
+- Supports bidirectional communication for remote control
 
 The C++ Viewer:
 - Displays all extracted types in an interactive UI
@@ -110,6 +111,9 @@ make
 - ✅ Automatic injection into Unity games
 - ✅ Complete Assembly-CSharp reflection
 - ✅ Extracts private and public members
+- ✅ **Live data streaming** - Continuously updates reflection data
+- ✅ **Bidirectional communication** - Viewer can send commands
+- ✅ **Configurable update rate** - Control refresh frequency
 - ✅ Named Pipe IPC communication
 - ✅ Background thread processing
 - ✅ Minimal game performance impact
@@ -197,14 +201,32 @@ Unity Game (with MelonLoader)
     │
     ├─> Serializes to JSON
     │
-    └─> Sends via Named Pipe
+    └─> Streams continuously via Named Pipe (bidirectional)
             │
-            └─> C++ Viewer receives data
+            ├─> C++ Viewer receives live updates
+            │       │
+            │       ├─> Parses JSON
+            │       │
+            │       └─> Displays in ImGui UI
+            │
+            └─> Viewer can send commands back
                     │
-                    ├─> Parses JSON
+                    ├─> INTERVAL:500 (set update rate to 500ms)
                     │
-                    └─> Displays in ImGui UI
+                    └─> REFRESH (force immediate update)
 ```
+
+## Command Protocol
+
+The viewer can send commands to the mod to control behavior:
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `INTERVAL:ms` | Set update interval in milliseconds | `INTERVAL:500` |
+| `REFRESH` | Force immediate data refresh | `REFRESH` |
+
+Default update interval: 1000ms (1 second)
+Minimum update interval: 100ms
 
 ## Documentation
 
@@ -265,6 +287,8 @@ This tool is for:
 
 ## Future Enhancements
 
+- [x] Live data streaming (✅ Implemented!)
+- [x] Bidirectional communication (✅ Implemented!)
 - [ ] IL2CPP support via Unhollower
 - [ ] GameObject hierarchy viewing
 - [ ] Real-time field value inspection

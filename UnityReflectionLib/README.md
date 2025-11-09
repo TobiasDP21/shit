@@ -10,7 +10,7 @@ This is a **MelonLoader mod** that hooks into Unity games and uses reflection to
 - All methods with full signatures
 - All properties
 
-The data is then transmitted to an external C++ viewer application via Named Pipes for analysis.
+The data is then continuously streamed to an external C++ viewer application via Named Pipes for real-time analysis.
 
 ## Use Cases
 
@@ -83,8 +83,16 @@ When the mod loads successfully, you'll see:
 [UnityReflectionMod] Starting IPC server...
 [UnityReflectionMod] [IPC] IPC Server started on pipe: UnityReflectionPipe
 [UnityReflectionMod] [IPC] Waiting for client connection...
-[UnityReflectionMod] [IPC] Client connected!
-[UnityReflectionMod] [IPC] Sent XXXXX bytes to client
+[UnityReflectionMod] [IPC] Client connected! Starting live data stream...
+[UnityReflectionMod] [IPC] Sent update: XXXXX bytes (XXX types)
+[UnityReflectionMod] [IPC] Sent update: XXXXX bytes (XXX types)
+... (continues every 1 second by default)
+```
+
+When viewer sends commands:
+```
+[UnityReflectionMod] [IPC] Received command: INTERVAL:500
+[UnityReflectionMod] [IPC] Update interval set to 500ms
 ```
 
 ## Features
@@ -101,11 +109,40 @@ When the mod loads successfully, you'll see:
 ### IPC Communication
 
 - **Named Pipes**: Fast, reliable inter-process communication
+- **Bidirectional**: Two-way communication for commands and data
+- **Live Streaming**: Continuous data updates (default: 1 second interval)
+- **Command Protocol**: Viewer can control update rate and request refreshes
 - **JSON Format**: Human-readable data transmission
 - **Auto-reconnect**: Viewer reconnects when game restarts
 - **Background Thread**: Doesn't block game execution
 
 ## Configuration
+
+### Update Interval
+
+The default update interval is 1000ms (1 second). You can change it programmatically:
+
+```csharp
+ipcServer.UpdateInterval = 500; // Update every 500ms
+```
+
+Or send a command from the viewer:
+```
+INTERVAL:500
+```
+
+Minimum interval: 100ms
+
+### Command Protocol
+
+The viewer can send text commands to control the mod:
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `INTERVAL:ms` | Set update interval in milliseconds | `INTERVAL:500` |
+| `REFRESH` | Force immediate data refresh | `REFRESH` |
+
+Commands are sent as UTF-8 strings over the bidirectional Named Pipe.
 
 ### Changing the Pipe Name
 
@@ -147,10 +184,13 @@ Static class for performing reflection.
 
 ### IPCServer
 
-Named pipe server for IPC.
+Named pipe server for IPC with live streaming capabilities.
+
+**Properties**:
+- `UpdateInterval` - Get/set update interval in milliseconds (min: 100ms)
 
 **Methods**:
-- `Start()` - Start the server
+- `Start()` - Start the server and begin streaming
 - `Stop()` - Stop the server
 
 **Events**:

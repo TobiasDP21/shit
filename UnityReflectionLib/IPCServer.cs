@@ -13,9 +13,16 @@ namespace UnityReflectionMod
         private NamedPipeServerStream? pipeServer;
         private bool isRunning;
         private Thread? serverThread;
+        private int updateIntervalMs = 1000; // Update every 1 second by default
 
         public event Action<string>? OnLog;
         public event Action<string>? OnError;
+
+        public int UpdateInterval
+        {
+            get => updateIntervalMs;
+            set => updateIntervalMs = Math.Max(100, value); // Minimum 100ms
+        }
 
         public void Start()
         {
@@ -57,7 +64,7 @@ namespace UnityReflectionMod
                 {
                     using (pipeServer = new NamedPipeServerStream(
                         PipeName,
-                        PipeDirection.Out,
+                        PipeDirection.InOut, // Bidirectional for reading commands and writing data
                         1,
                         PipeTransmissionMode.Byte,
                         PipeOptions.Asynchronous))
@@ -68,25 +75,53 @@ namespace UnityReflectionMod
 
                         if (!isRunning) break;
 
-                        Log("Client connected!");
+                        Log("Client connected! Starting live data stream...");
 
-                        // Get reflection data
-                        var data = AssemblyReflector.ReflectAssemblyCSharp();
+                        // Start command reader thread
+                        var commandThread = new Thread(() => ReadCommands(pipeServer))
+                        {
+                            IsBackground = true,
+                            Name = "Command Reader Thread"
+                        };
+                        commandThread.Start();
 
-                        // Serialize to JSON
-                        string json = SerializeToJson(data);
+                        // Send live updates
+                        while (isRunning && pipeServer.IsConnected)
+                        {
+                            try
+                            {
+                                // Get fresh reflection data
+                                var data = AssemblyReflector.ReflectAssemblyCSharp();
 
-                        // Send data
-                        byte[] buffer = Encoding.UTF8.GetBytes(json);
-                        byte[] lengthPrefix = BitConverter.GetBytes(buffer.Length);
+                                // Serialize to JSON
+                                string json = SerializeToJson(data);
 
-                        pipeServer.Write(lengthPrefix, 0, lengthPrefix.Length);
-                        pipeServer.Write(buffer, 0, buffer.Length);
-                        pipeServer.Flush();
+                                // Send data with length prefix
+                                byte[] buffer = Encoding.UTF8.GetBytes(json);
+                                byte[] lengthPrefix = BitConverter.GetBytes(buffer.Length);
 
-                        Log($"Sent {buffer.Length} bytes to client");
+                                pipeServer.Write(lengthPrefix, 0, lengthPrefix.Length);
+                                pipeServer.Write(buffer, 0, buffer.Length);
+                                pipeServer.Flush();
 
-                        Thread.Sleep(500); // Give client time to read
+                                Log($"Sent update: {buffer.Length} bytes ({data.Types.Count} types)");
+
+                                // Wait before next update
+                                Thread.Sleep(updateIntervalMs);
+                            }
+                            catch (IOException)
+                            {
+                                Log("Client disconnected");
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                LogError($"Error sending data: {ex.Message}");
+                                break;
+                            }
+                        }
+
+                        Log("Client session ended");
                     }
                 }
                 catch (Exception ex)
@@ -97,6 +132,50 @@ namespace UnityReflectionMod
                         Thread.Sleep(1000); // Wait before retry
                     }
                 }
+            }
+        }
+
+        private void ReadCommands(NamedPipeServerStream pipe)
+        {
+            try
+            {
+                byte[] buffer = new byte[1024];
+                while (isRunning && pipe.IsConnected)
+                {
+                    int bytesRead = pipe.Read(buffer, 0, buffer.Length);
+                    if (bytesRead > 0)
+                    {
+                        string command = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                        ProcessCommand(command);
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                // Client disconnected, normal exit
+            }
+            catch (Exception ex)
+            {
+                LogError($"Error reading command: {ex.Message}");
+            }
+        }
+
+        private void ProcessCommand(string command)
+        {
+            Log($"Received command: {command}");
+
+            if (command.StartsWith("INTERVAL:"))
+            {
+                if (int.TryParse(command.Substring(9), out int interval))
+                {
+                    UpdateInterval = interval;
+                    Log($"Update interval set to {interval}ms");
+                }
+            }
+            else if (command == "REFRESH")
+            {
+                Log("Manual refresh requested");
+                // Next update will happen on next loop iteration
             }
         }
 
