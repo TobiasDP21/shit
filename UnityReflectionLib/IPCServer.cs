@@ -58,32 +58,67 @@ namespace UnityReflectionMod
 
         private void ServerLoop()
         {
+            bool useBidirectional = true;
+
             while (isRunning)
             {
                 try
                 {
+                    Log("Creating named pipe server...");
+
+                    // Try bidirectional first, fall back to write-only if not supported
+                    PipeDirection direction = useBidirectional ? PipeDirection.InOut : PipeDirection.Out;
+
                     using (pipeServer = new NamedPipeServerStream(
                         PipeName,
-                        PipeDirection.InOut, // Bidirectional for reading commands and writing data
+                        direction,
                         1,
                         PipeTransmissionMode.Byte,
-                        PipeOptions.Asynchronous))
+                        PipeOptions.None)) // Use synchronous mode for Mono compatibility
                     {
+                        if (useBidirectional)
+                        {
+                            Log("Bidirectional pipe created (commands supported)");
+                        }
+                        else
+                        {
+                            Log("Write-only pipe created (commands not supported on this platform)");
+                        }
                         Log("Waiting for client connection...");
 
-                        pipeServer.WaitForConnection();
+                        try
+                        {
+                            pipeServer.WaitForConnection();
+                        }
+                        catch (NotImplementedException ex)
+                        {
+                            LogError($"WaitForConnection not supported: {ex.Message}");
+                            LogError("Attempting synchronous connection...");
+                            // Platform might not support async, try without waiting
+                        }
 
                         if (!isRunning) break;
 
                         Log("Client connected! Starting live data stream...");
 
-                        // Start command reader thread
-                        var commandThread = new Thread(() => ReadCommands(pipeServer))
+                        // Start command reader thread only if bidirectional
+                        if (useBidirectional)
                         {
-                            IsBackground = true,
-                            Name = "Command Reader Thread"
-                        };
-                        commandThread.Start();
+                            try
+                            {
+                                var commandThread = new Thread(() => ReadCommands(pipeServer))
+                                {
+                                    IsBackground = true,
+                                    Name = "Command Reader Thread"
+                                };
+                                commandThread.Start();
+                                Log("Command reader thread started");
+                            }
+                            catch (Exception ex)
+                            {
+                                LogError($"Could not start command reader: {ex.Message}");
+                            }
+                        }
 
                         // Send live updates
                         while (isRunning && pipeServer.IsConnected)
@@ -124,10 +159,35 @@ namespace UnityReflectionMod
                         Log("Client session ended");
                     }
                 }
+                catch (NotImplementedException ex)
+                {
+                    if (useBidirectional)
+                    {
+                        LogError($"Bidirectional pipes not supported: {ex.Message}");
+                        LogError("Falling back to write-only mode (commands will not work)");
+                        useBidirectional = false;
+                        // Retry immediately with write-only mode
+                        continue;
+                    }
+                    else
+                    {
+                        LogError($"Fatal error - basic pipe operations not supported: {ex.Message}");
+                        break;
+                    }
+                }
                 catch (Exception ex)
                 {
                     if (isRunning)
                     {
+                        // Check if it's a "not implemented" error (might be wrapped)
+                        if (ex.Message.Contains("not implemented") && useBidirectional)
+                        {
+                            LogError($"Bidirectional mode failed: {ex.Message}");
+                            LogError("Switching to write-only mode...");
+                            useBidirectional = false;
+                            continue;
+                        }
+
                         LogError($"Server error: {ex.Message}");
                         Thread.Sleep(1000); // Wait before retry
                     }
@@ -139,20 +199,46 @@ namespace UnityReflectionMod
         {
             try
             {
+                // Check if the pipe supports reading
+                if (!pipe.CanRead)
+                {
+                    LogError("Pipe does not support reading (platform limitation)");
+                    return;
+                }
+
                 byte[] buffer = new byte[1024];
                 while (isRunning && pipe.IsConnected)
                 {
-                    int bytesRead = pipe.Read(buffer, 0, buffer.Length);
-                    if (bytesRead > 0)
+                    try
                     {
-                        string command = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
-                        ProcessCommand(command);
+                        // Attempt to read with a small timeout approach
+                        int bytesRead = pipe.Read(buffer, 0, buffer.Length);
+                        if (bytesRead > 0)
+                        {
+                            string command = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                            ProcessCommand(command);
+                        }
+                        else
+                        {
+                            // No data, wait a bit before trying again
+                            Thread.Sleep(100);
+                        }
+                    }
+                    catch (NotImplementedException)
+                    {
+                        LogError("Read operation not implemented on this platform - command support disabled");
+                        return;
                     }
                 }
             }
             catch (IOException)
             {
                 // Client disconnected, normal exit
+                Log("Command reader: client disconnected");
+            }
+            catch (NotImplementedException)
+            {
+                LogError("Named pipe read operations not supported on this platform");
             }
             catch (Exception ex)
             {
